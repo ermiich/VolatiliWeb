@@ -1,0 +1,11 @@
+.env
+*.mem
+*.raw
+*.dmp
+__pycache__/
+node_modules/
+volatiliweb.yml
+.env*
+.github/
+github/
+llm.*
