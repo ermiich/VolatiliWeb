@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 
 class PluginExecutionRequest(BaseModel):
-    plugin_name: str
+    plugin_name: Optional[str] = None
+    command_suffix: Optional[str] = None
 
 
 class PluginExecutionResponse(BaseModel):
@@ -20,6 +21,7 @@ class PluginExecutionResponse(BaseModel):
     result_row_count: Optional[int] = None
     result_data: Optional[List[Dict[str, Any]]] = None
     error_message: Optional[str] = None
+    error_traceback: Optional[str] = None
     created_at: datetime
 
     class Config:

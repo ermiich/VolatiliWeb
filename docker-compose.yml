@@ -42,6 +42,7 @@ services:
     volumes:
       - evidence-data:/evidence:ro
       - symbols-data:/symbols
+      - postgres-data:/var/lib/postgresql/data
     depends_on:
       db:
         condition: service_healthy
@@ -81,10 +82,14 @@ services:
     networks:
       - volatiliweb-net
 
+
 volumes:
   postgres-data:
+    name: volatiliweb_postgres-data-fix
   evidence-data:
+    name: volatiliweb_evidence-data
   symbols-data:
+    name: volatiliweb_symbols-data
 
 networks:
   volatiliweb-net:

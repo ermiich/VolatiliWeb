@@ -1,6 +1,9 @@
 from celery import Celery
 
+
+# Import settings after environment is loaded
 from app.config import settings
+
 
 
 celery_app = Celery(

@@ -12,6 +12,7 @@ def execute_volatility_plugin(
     dump_path: str,
     plugin_class_path: str,
     symbols_path: str,
+    extra_args: list[str] | None = None,
     timeout_seconds: int = 1500,
 ) -> dict:
     cmd = [
@@ -26,6 +27,8 @@ def execute_volatility_plugin(
         "json",
         plugin_class_path,
     ]
+    if extra_args:
+        cmd.extend(extra_args)
 
     try:
         completed = subprocess.run(

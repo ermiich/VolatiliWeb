@@ -2,6 +2,12 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    @property
+    def celery_result_backend(self) -> str:
+        return (
+            f"db+postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
     postgres_user: str = "volatiliweb"
     postgres_password: str = "changeme_in_production"
     postgres_db: str = "volatiliweb_db"

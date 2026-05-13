@@ -9,9 +9,12 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     redis_url: str = "redis://redis:6379/0"
     celery_broker_url: str = "redis://redis:6379/0"
-    celery_result_backend: str = (
-        "db+postgresql://volatiliweb:changeme_in_production@db:5432/volatiliweb_db"
-    )
+    @property
+    def celery_result_backend(self) -> str:
+        return (
+            f"db+postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
     evidence_path: str = "/evidence"
     symbols_path: str = "/symbols"
 

@@ -66,7 +66,7 @@ def test_os_detection_completes(client, state):
 def test_execute_pslist(client, state):
     response = client.post(
         f"/api/dumps/{state['dump_id']}/execute",
-        json={"plugin_name": "windows.pslist.PsList"},
+        json={"plugin_name": "windows.pslist"},
     )
     assert response.status_code == 202
     payload = response.json()
@@ -97,10 +97,28 @@ def test_pslist_completes(client, state):
 def test_results_persisted_in_db(client, state):
     response = client.post(
         f"/api/dumps/{state['dump_id']}/execute",
-        json={"plugin_name": "windows.pslist.PsList"},
+        json={"plugin_name": "windows.pslist"},
     )
     assert response.status_code in (200, 202)
     assert response.headers.get("X-Cached") == "true"
+
+
+def test_execute_manual_command_suffix(client, state):
+    response = client.post(
+        f"/api/dumps/{state['dump_id']}/execute",
+        json={"command_suffix": "windows.pslist"},
+    )
+    assert response.status_code in (200, 202)
+    payload = response.json()
+    assert payload["plugin_name"] == "windows.pslist"
+
+
+def test_manual_command_blocks_file_override(client, state):
+    response = client.post(
+        f"/api/dumps/{state['dump_id']}/execute",
+        json={"command_suffix": "windows.pslist -f /tmp/other.mem"},
+    )
+    assert response.status_code == 422
 
 
 def test_delete_case_cleans_disk(client, state):

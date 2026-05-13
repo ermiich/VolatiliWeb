@@ -22,6 +22,7 @@ class PluginExecution(Base):
     dump_id = Column(UUID(as_uuid=True), ForeignKey("dump.id", ondelete="CASCADE"), nullable=False)
     plugin_name = Column(String(128), nullable=False)
     plugin_display_name = Column(String(128), nullable=True)
+    command_suffix = Column(Text, nullable=False, server_default=text("''"))
     celery_task_id = Column(String(255), nullable=True)
     status = Column(Enum(ExecutionStatus, name="execution_status"), nullable=False, server_default="pending")
     started_at = Column(DateTime(timezone=True), nullable=True)

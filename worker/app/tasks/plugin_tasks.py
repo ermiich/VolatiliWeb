@@ -1,3 +1,4 @@
+import shlex
 import traceback
 from datetime import datetime, timezone
 from sqlalchemy import select
@@ -8,68 +9,6 @@ from app.database import SessionLocal
 from app.models.dump import Dump, DumpStatus
 from app.models.plugin_execution import PluginExecution, ExecutionStatus
 from app.tasks.volatility_runner import execute_volatility_plugin
-
-
-PLUGIN_CATALOG = [
-    {
-        "name": "windows.info.Info",
-        "display_name": "System Info",
-        "description": "Informacion general del sistema operativo y el volcado",
-        "class_path": "windows.info.Info",
-        "os": "windows",
-    },
-    {
-        "name": "windows.pslist.PsList",
-        "display_name": "Process List",
-        "description": "Lista de procesos activos al momento del volcado",
-        "class_path": "windows.pslist.PsList",
-        "os": "windows",
-    },
-    {
-        "name": "windows.pstree.PsTree",
-        "display_name": "Process Tree",
-        "description": "Arbol de procesos con jerarquia padre-hijo",
-        "class_path": "windows.pstree.PsTree",
-        "os": "windows",
-    },
-    {
-        "name": "windows.netscan.NetScan",
-        "display_name": "Network Scan",
-        "description": "Conexiones de red activas y sockets",
-        "class_path": "windows.netscan.NetScan",
-        "os": "windows",
-    },
-    {
-        "name": "windows.cmdline.CmdLine",
-        "display_name": "Command Lines",
-        "description": "Argumentos de linea de comandos de cada proceso",
-        "class_path": "windows.cmdline.CmdLine",
-        "os": "windows",
-    },
-    {
-        "name": "windows.dlllist.DllList",
-        "display_name": "DLL List",
-        "description": "DLLs cargadas por cada proceso",
-        "class_path": "windows.dlllist.DllList",
-        "os": "windows",
-    },
-    {
-        "name": "windows.malfind.Malfind",
-        "display_name": "Malfind (lento)",
-        "description": "Detecta regiones de memoria con posible codigo inyectado",
-        "class_path": "windows.malfind.Malfind",
-        "os": "windows",
-    },
-]
-
-
-def _get_plugin_class_path(plugin_name: str) -> str | None:
-    if plugin_name.startswith("windows."):
-        return plugin_name
-    for plugin in PLUGIN_CATALOG:
-        if plugin["name"] == plugin_name:
-            return plugin["class_path"]
-    return None
 
 
 @celery_app.task(bind=True, name="detect_os")
@@ -113,7 +52,7 @@ def detect_os(self, dump_id: str):
 
 
 @celery_app.task(bind=True, name="run_plugin")
-def run_plugin(self, execution_id: str):
+def run_plugin(self, execution_id: str, plugin_class_path: str | None = None):
     session = SessionLocal()
     try:
         execution = session.execute(
@@ -130,11 +69,16 @@ def run_plugin(self, execution_id: str):
         execution.started_at = datetime.now(timezone.utc)
         session.commit()
 
-        class_path = _get_plugin_class_path(execution.plugin_name)
-        if class_path is None:
+        extra_args = shlex.split(execution.command_suffix) if execution.command_suffix else None
+        resolved_class_path = plugin_class_path or execution.plugin_name
+        if resolved_class_path == execution.plugin_name and resolved_class_path.count(".") < 2:
             raise RuntimeError(f"Plugin '{execution.plugin_name}' no encontrado")
-
-        result = execute_volatility_plugin(dump.file_path, class_path, settings.symbols_path)
+        result = execute_volatility_plugin(
+            dump.file_path,
+            resolved_class_path,
+            settings.symbols_path,
+            extra_args=extra_args,
+        )
 
         execution.status = ExecutionStatus.completed
         execution.result_data = result.get("rows")

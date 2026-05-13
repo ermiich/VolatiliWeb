@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import client from "../api/client.js";
 import LoadingSpinner from "../components/LoadingSpinner.jsx";
+import CommandBuilder from "../components/CommandBuilder.jsx";
 import PluginSelector from "../components/PluginSelector.jsx";
+import SetOSForm from "../components/SetOSForm.jsx";
 import PluginResultTable from "../components/PluginResultTable.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import usePolling from "../hooks/usePolling.js";
-import { formatBytes, truncateHash } from "../utils/formatters.js";
+import { formatBytes, formatLocalDateTime, truncateHash } from "../utils/formatters.js";
 
 const AnalysisPage = () => {
   const { dumpId } = useParams();
@@ -16,6 +18,21 @@ const AnalysisPage = () => {
   const [plugins, setPlugins] = useState([]);
   const [executions, setExecutions] = useState([]);
   const [activeExecutionId, setActiveExecutionId] = useState(null);
+
+  const extractErrorMessage = (error, fallback) => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) {
+      return detail;
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      return detail[0]?.msg || fallback;
+    }
+    const message = error?.response?.data?.message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+    return fallback;
+  };
 
   const fetchDump = async () => {
     const response = await client.get(`/api/dumps/${dumpId}`);
@@ -65,11 +82,17 @@ const AnalysisPage = () => {
     }
   }, [polledExecution]);
 
-  const handleExecute = async (pluginName) => {
+  const handleExecute = async (request) => {
+    const payload = typeof request === "string"
+      ? { plugin_name: request }
+      : {
+          ...(request?.pluginName ? { plugin_name: request.pluginName } : {}),
+          ...(request?.commandSuffix ? { command_suffix: request.commandSuffix } : {}),
+        };
+    const isManualCommand = typeof request !== "string" && Boolean(request?.commandSuffix);
+
     try {
-      const response = await client.post(`/api/dumps/${dumpId}/execute`, {
-        plugin_name: pluginName
-      });
+      const response = await client.post(`/api/dumps/${dumpId}/execute`, payload);
       setExecutions((prev) => {
         const exists = prev.find((item) => item.id === response.data.id);
         if (exists) {
@@ -81,10 +104,10 @@ const AnalysisPage = () => {
       if (response.headers["x-cached"] === "true") {
         toast.success("Resultado cacheado cargado");
       } else {
-        toast.success("Plugin en ejecucion");
+        toast.success(isManualCommand ? "Comando en ejecucion" : "Plugin en ejecucion");
       }
     } catch (error) {
-      toast.error("No se pudo ejecutar el plugin");
+      toast.error(extractErrorMessage(error, isManualCommand ? "No se pudo ejecutar el comando" : "No se pudo ejecutar el plugin"));
     }
   };
 
@@ -93,6 +116,18 @@ const AnalysisPage = () => {
   }
 
   const selectedExecution = executions.find((item) => item.id === activeExecutionId);
+  const selectedExecutionLabel = selectedExecution?.plugin_display_name || selectedExecution?.plugin_name;
+  const selectedExecutionTime = formatLocalDateTime(
+    selectedExecution?.started_at || selectedExecution?.created_at
+  );
+
+  // Plugins de detección de OS permitidos siempre
+  const detectionPlugins = ["windows.info"];
+
+  // Plugins habilitados según si hay OS detectado
+  const availablePlugins = dump.detected_os
+    ? plugins
+    : plugins.filter((p) => detectionPlugins.includes(p.name));
 
   return (
     <div className="space-y-6">
@@ -114,13 +149,29 @@ const AnalysisPage = () => {
         ) : null}
       </div>
 
+
+      <div className="space-y-3">
+        <CommandBuilder dump={dump} onExecute={handleExecute} />
+      </div>
+
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-100">Plugins disponibles</h2>
+        <p className="text-sm text-slate-400">
+          Usa estos accesos rapidos si no necesitas argumentos extra. Para comandos personalizados, usa la consola web de arriba.
+        </p>
         <PluginSelector
-          plugins={plugins}
-          disabled={!dump.detected_os}
+          plugins={availablePlugins}
+          disabled={availablePlugins.length === 0}
           onExecute={handleExecute}
         />
+        {!dump.detected_os && (
+          <div className="mt-4">
+            <div className="mb-2 text-xs text-slate-400">
+              Si la detección automática falla, puedes establecer el sistema operativo manualmente:
+            </div>
+            <SetOSForm dumpId={dump.id} onSuccess={fetchDump} />
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-surface/60">
@@ -140,8 +191,13 @@ const AnalysisPage = () => {
                 }`}
               >
                 <div>
-                  <div className="font-semibold text-slate-100">{execution.plugin_name}</div>
+                  <div className="font-semibold text-slate-100">
+                    {execution.plugin_display_name || execution.plugin_name}
+                  </div>
                   <div className="text-xs text-slate-400">{execution.id}</div>
+                  <div className="text-[11px] text-slate-500">
+                    Ejecutado: {formatLocalDateTime(execution.started_at || execution.created_at)}
+                  </div>
                 </div>
                 <StatusBadge status={execution.status} />
               </button>
@@ -153,10 +209,16 @@ const AnalysisPage = () => {
       {selectedExecution ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-100">Resultado</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-100">
+                Resultado{selectedExecutionLabel ? ` · ${selectedExecutionLabel}` : ""}
+              </h2>
+              <p className="text-xs text-slate-400">Ejecutado: {selectedExecutionTime}</p>
+            </div>
             <StatusBadge status={selectedExecution.status} />
           </div>
           <PluginResultTable
+            execution={selectedExecution}
             rows={selectedExecution.result_data}
             pluginName={selectedExecution.plugin_name}
           />

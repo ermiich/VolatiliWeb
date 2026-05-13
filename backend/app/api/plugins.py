@@ -1,6 +1,11 @@
+import re
+import shlex
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel
 
 from app.config import settings
 from app.database import get_async_session
@@ -21,7 +26,7 @@ def get_celery_app() -> Celery:
         _celery_app = Celery("volatiliweb_api", broker=settings.celery_broker_url)
     return _celery_app
 
-WINDOWS_PLUGIN_NAMES = [
+WINDOWS_PLUGIN_CLASS_PATHS = [
     "windows.amcache.Amcache",
     "windows.bigpools.BigPools",
     "windows.callbacks.Callbacks",
@@ -118,50 +123,84 @@ WINDOWS_PLUGIN_NAMES = [
 PLUGIN_OVERRIDES = {
     "windows.info.Info": {
         "display_name": "System Info",
-        "description": "Informacion general del sistema operativo y el volcado",
+        "description": "Resumen del sistema operativo y metadatos del dump",
     },
     "windows.pslist.PsList": {
         "display_name": "Process List",
-        "description": "Lista de procesos activos al momento del volcado",
+        "description": "Lista de procesos activos y su contexto basico",
     },
     "windows.pstree.PsTree": {
         "display_name": "Process Tree",
-        "description": "Arbol de procesos con jerarquia padre-hijo",
+        "description": "Arbol jerarquico de procesos detectados en memoria",
     },
     "windows.netscan.NetScan": {
         "display_name": "Network Scan",
-        "description": "Conexiones de red activas y sockets",
+        "description": "Conexiones de red y sockets activos detectados en memoria",
     },
     "windows.cmdline.CmdLine": {
         "display_name": "Command Lines",
-        "description": "Argumentos de linea de comandos de cada proceso",
+        "description": "Lineas de comando asociadas a cada proceso",
     },
     "windows.dlllist.DllList": {
         "display_name": "DLL List",
-        "description": "DLLs cargadas por cada proceso",
+        "description": "Modulos DLL cargados por cada proceso",
     },
     "windows.malfind.Malfind": {
         "display_name": "Malfind",
-        "description": "Detecta regiones de memoria con posible codigo inyectado",
+        "description": "Detecta regiones de memoria con indicios de inyeccion o codigo sospechoso",
     },
 }
 
 
+def _humanize_plugin_tail(plugin_tail: str) -> str:
+    label = plugin_tail.replace("_", " ")
+    label = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", label)
+    label = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", label)
+
+    acronym_words = {"api", "dll", "iat", "mbr", "ntfs", "os", "pe", "pid", "ppid", "ssdt", "tcp", "udp", "vad"}
+    parts = []
+    for word in label.split():
+        if word.isupper():
+            parts.append(word)
+        elif word.lower() in acronym_words:
+            parts.append(word.upper())
+        else:
+            parts.append(word.capitalize())
+    return " ".join(parts)
+
+
+def _canonical_plugin_name(plugin_name: str) -> str:
+    plugin_name = (plugin_name or "").strip()
+    if not plugin_name:
+        return plugin_name
+    return PLUGIN_NAME_ALIASES.get(plugin_name, plugin_name)
+
+
 def _default_display_name(plugin_name: str) -> str:
     tail = plugin_name.split(".")[-1]
-    return tail.replace("_", " ")
+    return _humanize_plugin_tail(tail)
+
+
+def _default_description(display_name: str) -> str:
+    return f"Plugin de Volatility 3 para analizar {display_name.lower()}."
 
 
 def _build_plugin_catalog() -> list[dict]:
     catalog = []
-    for name in WINDOWS_PLUGIN_NAMES:
-        override = PLUGIN_OVERRIDES.get(name, {})
+    seen_names = set()
+    for class_path in WINDOWS_PLUGIN_CLASS_PATHS:
+        name = ".".join(class_path.split(".")[:-1])
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        override = PLUGIN_OVERRIDES.get(class_path, {})
+        display_name = override.get("display_name", _default_display_name(name))
         catalog.append(
             {
                 "name": name,
-                "display_name": override.get("display_name", _default_display_name(name)),
-                "description": override.get("description", f"Plugin Volatility: {name}"),
-                "class_path": name,
+                "display_name": display_name,
+                "description": override.get("description", _default_description(display_name)),
+                "class_path": class_path,
                 "os": "windows",
             }
         )
@@ -170,12 +209,125 @@ def _build_plugin_catalog() -> list[dict]:
 
 PLUGIN_CATALOG = _build_plugin_catalog()
 
+PLUGIN_NAME_ALIASES = {
+    plugin["name"]: plugin["name"] for plugin in PLUGIN_CATALOG
+}
+PLUGIN_NAME_ALIASES.update(
+    {
+        plugin["class_path"]: plugin["name"]
+        for plugin in PLUGIN_CATALOG
+    }
+)
+
+PLUGIN_CLASS_PATH_BY_NAME = {
+    plugin["name"]: plugin["class_path"]
+    for plugin in PLUGIN_CATALOG
+}
+
 
 def _get_plugin_entry(plugin_name: str):
+    plugin_name = _canonical_plugin_name(plugin_name)
     for plugin in PLUGIN_CATALOG:
         if plugin["name"] == plugin_name:
             return plugin
     return None
+
+
+LOCKED_COMMAND_TOKENS = {
+    "-f",
+    "--file",
+    "-q",
+    "--quiet",
+    "-r",
+    "--renderer",
+    "-s",
+    "--symbol-dirs",
+}
+
+RESERVED_COMMAND_TOKENS = {"python", "python3", "vol.py"}
+
+
+def _get_plugin_display_name(plugin_name: str) -> str:
+    plugin_entry = _get_plugin_entry(plugin_name)
+    if plugin_entry is not None:
+        return plugin_entry["display_name"]
+    return _default_display_name(_canonical_plugin_name(plugin_name))
+
+
+def _get_plugin_class_path(plugin_name: str) -> str | None:
+    plugin_entry = _get_plugin_entry(plugin_name)
+    if plugin_entry is not None:
+        return plugin_entry["class_path"]
+    return None
+
+
+def _normalize_command_request(
+    plugin_name: str | None,
+    command_suffix: str | None,
+) -> tuple[str, str]:
+    normalized_suffix = (command_suffix or "").strip()
+    tokens: list[str] = []
+
+    if normalized_suffix:
+        try:
+            tokens = shlex.split(normalized_suffix)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="El comando contiene comillas sin cerrar") from exc
+
+    normalized_plugin = _canonical_plugin_name(plugin_name or "")
+    if normalized_plugin:
+        if normalized_plugin.startswith("-") or normalized_plugin.lower() in RESERVED_COMMAND_TOKENS:
+            raise HTTPException(status_code=422, detail="El comando debe empezar por un plugin de Volatility")
+        if tokens and _canonical_plugin_name(tokens[0]).lower() == normalized_plugin.lower():
+            tokens = tokens[1:]
+    else:
+        if not tokens:
+            raise HTTPException(status_code=422, detail="Debes indicar un plugin o un comando de Volatility")
+        normalized_plugin = _canonical_plugin_name(tokens.pop(0))
+        if normalized_plugin.startswith("-") or normalized_plugin.lower() in RESERVED_COMMAND_TOKENS:
+            raise HTTPException(status_code=422, detail="El comando debe empezar por un plugin de Volatility")
+
+    if not _get_plugin_entry(normalized_plugin):
+        raise HTTPException(status_code=422, detail="Plugin no soportado")
+
+    for token in tokens:
+        lowered = token.lower()
+        if lowered in LOCKED_COMMAND_TOKENS:
+            raise HTTPException(
+                status_code=422,
+                detail="No puedes cambiar el fichero, los símbolos ni el renderer desde la web",
+            )
+        if lowered in RESERVED_COMMAND_TOKENS:
+            raise HTTPException(
+                status_code=422,
+                detail="No incluyas python ni vol.py; el wrapper ya los añade",
+            )
+
+    return normalized_plugin, shlex.join(tokens) if tokens else ""
+
+
+def _serialize_execution(execution: PluginExecution) -> PluginExecutionResponse:
+    canonical_plugin_name = _canonical_plugin_name(execution.plugin_name)
+    payload = {
+        "id": execution.id,
+        "dump_id": execution.dump_id,
+        "plugin_name": canonical_plugin_name,
+        "plugin_display_name": execution.plugin_display_name or _get_plugin_display_name(canonical_plugin_name),
+        "status": execution.status,
+        "started_at": execution.started_at,
+        "completed_at": execution.completed_at,
+        "result_row_count": execution.result_row_count,
+        "result_data": execution.result_data,
+        "error_message": execution.error_message,
+        "error_traceback": execution.error_traceback,
+        "created_at": execution.created_at,
+    }
+    return PluginExecutionResponse.model_validate(payload)
+
+
+class SetOSRequest(BaseModel):
+    detected_os: str
+    detected_os_version: str | None = None
 
 
 @router.get("/plugins")
@@ -195,20 +347,25 @@ async def execute_plugin(
     if dump is None:
         raise HTTPException(status_code=404, detail="Dump not found")
 
+
     if dump.status != DumpStatus.ready:
         raise HTTPException(status_code=422, detail="El dump no esta listo para analizar")
 
-    if not dump.detected_os:
-        raise HTTPException(status_code=422, detail="El dump no tiene OS detectado")
-
-    plugin_entry = _get_plugin_entry(payload.plugin_name)
+    plugin_name, command_suffix = _normalize_command_request(payload.plugin_name, payload.command_suffix)
+    plugin_entry = _get_plugin_entry(plugin_name)
     if plugin_entry is None:
         raise HTTPException(status_code=422, detail="Plugin no soportado")
+
+    # Permitir ejecutar plugins de detección de OS aunque no haya OS detectado
+    detection_plugins = {"windows.info"}  # Agrega aquí más si hay para otros OS
+    if not dump.detected_os and plugin_name not in detection_plugins:
+        raise HTTPException(status_code=422, detail="El dump no tiene OS detectado. Solo puedes ejecutar plugins de detección de OS.")
 
     existing = await session.execute(
         select(PluginExecution).where(
             PluginExecution.dump_id == dump_id,
-            PluginExecution.plugin_name == payload.plugin_name,
+            PluginExecution.plugin_name.in_({plugin_name, plugin_entry["class_path"]}),
+            PluginExecution.command_suffix == command_suffix,
         )
     )
     execution = existing.scalar_one_or_none()
@@ -216,7 +373,7 @@ async def execute_plugin(
     if execution and execution.status == ExecutionStatus.completed and (execution.result_row_count or 0) > 0:
         response.headers["X-Cached"] = "true"
         response.status_code = 200
-        return execution
+        return _serialize_execution(execution)
 
     if execution and execution.status == ExecutionStatus.completed:
         # Re-run stale/empty cached executions without violating unique constraints.
@@ -229,47 +386,74 @@ async def execute_plugin(
         execution.completed_at = None
 
         celery_app = get_celery_app()
-        task = celery_app.send_task("run_plugin", args=[str(execution.id)])
+        task = celery_app.send_task("run_plugin", args=[str(execution.id), plugin_entry["class_path"]])
         execution.celery_task_id = task.id
 
         await session.commit()
         await session.refresh(execution)
         response.status_code = 202
-        return execution
+        return _serialize_execution(execution)
 
     if execution and execution.status in {ExecutionStatus.pending, ExecutionStatus.running}:
         response.status_code = 202
-        return execution
+        return _serialize_execution(execution)
 
     new_execution = PluginExecution(
         dump_id=dump_id,
-        plugin_name=payload.plugin_name,
-        plugin_display_name=plugin_entry.get("display_name"),
+        plugin_name=plugin_name,
+        plugin_display_name=_get_plugin_display_name(plugin_name),
+        command_suffix=command_suffix,
         status=ExecutionStatus.pending,
     )
     session.add(new_execution)
     await session.flush()
 
     celery_app = get_celery_app()
-    task = celery_app.send_task("run_plugin", args=[str(new_execution.id)])
+    task = celery_app.send_task("run_plugin", args=[str(new_execution.id), plugin_entry["class_path"]])
     new_execution.celery_task_id = task.id
     await session.commit()
     await session.refresh(new_execution)
 
     response.status_code = 202
-    return new_execution
+    return _serialize_execution(new_execution)
+
+
+@router.post("/dumps/{dump_id}/set_os", status_code=200)
+async def set_os_for_dump(dump_id: str, payload: SetOSRequest, session: AsyncSession = Depends(get_async_session)):
+    result = await session.execute(select(Dump).where(Dump.id == dump_id))
+    dump = result.scalar_one_or_none()
+    if dump is None:
+        raise HTTPException(status_code=404, detail="Dump not found")
+    dump.detected_os = payload.detected_os
+    dump.detected_os_version = payload.detected_os_version
+    dump.status = DumpStatus.ready
+    await session.commit()
+    await session.refresh(dump)
+    return {"message": "OS actualizado", "detected_os": dump.detected_os, "detected_os_version": dump.detected_os_version}
 
 
 @router.get("/executions/{execution_id}", response_model=PluginExecutionResponse)
 async def get_execution(execution_id: str, session: AsyncSession = Depends(get_async_session)):
-    result = await session.execute(select(PluginExecution).where(PluginExecution.id == execution_id))
+    result = await session.execute(
+        select(PluginExecution)
+        .where(PluginExecution.id == execution_id)
+        .options(selectinload(PluginExecution.dump))
+    )
     execution = result.scalar_one_or_none()
     if execution is None:
         raise HTTPException(status_code=404, detail="Execution not found")
-    return execution
+    return _serialize_execution(execution)
 
 
 @router.get("/dumps/{dump_id}/executions", response_model=list[PluginExecutionResponse])
 async def list_executions(dump_id: str, session: AsyncSession = Depends(get_async_session)):
-    result = await session.execute(select(PluginExecution).where(PluginExecution.dump_id == dump_id))
-    return result.scalars().all()
+    result = await session.execute(
+        select(PluginExecution)
+        .where(PluginExecution.dump_id == dump_id)
+        .options(selectinload(PluginExecution.dump))
+    )
+    executions = result.scalars().all()
+    return [
+        _serialize_execution(execution)
+        for execution in executions
+    ]
