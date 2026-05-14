@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Bahnschrift", "Segoe UI Variable", "Segoe UI", "system-ui", "sans-serif";
+  --font-mono: "Cascadia Code", "SFMono-Regular", "Consolas", "Liberation Mono", "monospace";
+  --color-canvas: #070b14;
+  --color-base: #070b14;
+  --color-surface: #111827;
+  --color-surface-strong: #172033;
+  --color-panel: #0b1220;
+  --color-overlay: #050814;
+  --color-border: #27324a;
+  --color-foreground: #e5ecff;
+  --color-muted: #a7b3cf;
+  --color-subtle: #73809b;
+  --color-accent: #6d7bff;
+  --color-accent-foreground: #ffffff;
+  --color-info: #60a5fa;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #fb7185;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 34%),
+      radial-gradient(circle at top right, color-mix(in srgb, var(--color-success) 10%, transparent), transparent 28%),
+      linear-gradient(180deg, #0b1120 0%, #050814 100%);
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    font-family: var(--font-sans);
+    background: transparent;
+    color: var(--color-foreground);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+    color: var(--color-foreground);
+  }
+}

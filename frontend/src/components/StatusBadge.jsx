@@ -2,14 +2,14 @@ import React from "react";
 import { CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 
 const STATUS_MAP = {
-  uploaded: { label: "Subido", color: "bg-slate-700 text-slate-200", icon: Clock },
-  detecting: { label: "Detectando OS...", color: "bg-blue-600/20 text-blue-300", icon: Loader2 },
-  ready: { label: "Listo", color: "bg-emerald-600/20 text-emerald-300", icon: CheckCircle },
-  error: { label: "Error", color: "bg-red-600/20 text-red-300", icon: XCircle },
-  pending: { label: "En cola", color: "bg-slate-700 text-slate-200", icon: Clock },
-  running: { label: "Analizando...", color: "bg-blue-600/20 text-blue-300", icon: Loader2 },
-  completed: { label: "Completado", color: "bg-emerald-600/20 text-emerald-300", icon: CheckCircle },
-  failed: { label: "Error", color: "bg-red-600/20 text-red-300", icon: XCircle }
+  uploaded: { label: "Subido", color: "bg-surface/80 text-muted", icon: Clock },
+  detecting: { label: "Detectando OS...", color: "bg-info/15 text-info", icon: Loader2 },
+  ready: { label: "Listo", color: "bg-success/15 text-success", icon: CheckCircle },
+  error: { label: "Error", color: "bg-danger/15 text-danger", icon: XCircle },
+  pending: { label: "En cola", color: "bg-surface/80 text-muted", icon: Clock },
+  running: { label: "Analizando...", color: "bg-info/15 text-info", icon: Loader2 },
+  completed: { label: "Completado", color: "bg-success/15 text-success", icon: CheckCircle },
+  failed: { label: "Error", color: "bg-danger/15 text-danger", icon: XCircle }
 };
 
 const StatusBadge = ({ status }) => {

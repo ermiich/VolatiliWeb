@@ -23,7 +23,7 @@ const PluginSelector = ({ plugins, disabled, onExecute }) => {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Buscar plugin por nombre o descripcion..."
-        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+        className="w-full rounded-md border border-border bg-surface/70 px-3 py-2 text-sm text-foreground placeholder:text-subtle"
       />
       <div className="grid gap-3 md:grid-cols-2">
       {filteredPlugins.map((plugin) => (
@@ -37,8 +37,8 @@ const PluginSelector = ({ plugins, disabled, onExecute }) => {
               : "hover:border-accent hover:bg-surface"
           }`}
         >
-          <div className="text-sm font-semibold text-slate-100">{plugin.display_name}</div>
-          <div className="text-xs text-slate-400">{plugin.description}</div>
+          <div className="text-sm font-semibold text-foreground">{plugin.display_name}</div>
+          <div className="text-xs text-muted">{plugin.description}</div>
         </button>
       ))}
       </div>

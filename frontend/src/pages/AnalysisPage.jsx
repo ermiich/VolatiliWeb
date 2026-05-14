@@ -142,8 +142,8 @@ const AnalysisPage = () => {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-surface p-5">
-        <h1 className="text-xl font-semibold text-slate-100">{dump.filename}</h1>
-        <div className="mt-2 grid gap-2 text-xs text-slate-400 md:grid-cols-2">
+        <h1 className="text-xl font-semibold text-foreground">{dump.filename}</h1>
+        <div className="mt-2 grid gap-2 text-xs text-muted md:grid-cols-2">
           <div>
             Estado: <StatusBadge status={dump.status} />
           </div>
@@ -153,7 +153,7 @@ const AnalysisPage = () => {
           <div>SHA-256: {truncateHash(dump.file_hash_sha256, 24)}</div>
         </div>
         {dump.status === "error" && dump.error_message ? (
-          <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+          <div className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-3 text-xs text-danger">
             Error de deteccion: {dump.error_message}
           </div>
         ) : null}
@@ -165,8 +165,8 @@ const AnalysisPage = () => {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-100">Plugins disponibles</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="text-lg font-semibold text-foreground">Plugins disponibles</h2>
+        <p className="text-sm text-muted">
           Usa estos accesos rapidos si no necesitas argumentos extra. Para comandos personalizados, usa la consola web de arriba.
         </p>
         <PluginSelector
@@ -176,7 +176,7 @@ const AnalysisPage = () => {
         />
         {!dump.detected_os && (
           <div className="mt-4">
-            <div className="mb-2 text-xs text-slate-400">
+            <div className="mb-2 text-xs text-muted">
               Si la detección automática falla, puedes establecer el sistema operativo manualmente:
             </div>
             <SetOSForm dumpId={dump.id} onSuccess={fetchDump} />
@@ -185,11 +185,11 @@ const AnalysisPage = () => {
       </div>
 
       <div className="rounded-lg border border-border bg-surface/60">
-        <div className="border-b border-border px-4 py-3 text-sm font-semibold text-slate-200">
+        <div className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">
           Historial de ejecuciones
         </div>
         {executions.length === 0 ? (
-          <div className="p-4 text-sm text-slate-400">No hay ejecuciones aun.</div>
+          <div className="p-4 text-sm text-muted">No hay ejecuciones aun.</div>
         ) : (
           <div className="divide-y divide-border">
             {executions.map((execution) => (
@@ -201,11 +201,11 @@ const AnalysisPage = () => {
                 }`}
               >
                 <div>
-                  <div className="font-semibold text-slate-100">
+                  <div className="font-semibold text-foreground">
                     {execution.plugin_display_name || execution.plugin_name}
                   </div>
-                  <div className="text-xs text-slate-400">{execution.id}</div>
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-xs text-muted">{execution.id}</div>
+                  <div className="text-[11px] text-subtle">
                     Ejecutado: {formatLocalDateTime(execution.started_at || execution.created_at)}
                   </div>
                 </div>
@@ -220,33 +220,33 @@ const AnalysisPage = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">
+              <h2 className="text-lg font-semibold text-foreground">
                 Resultado{selectedExecutionLabel ? ` · ${selectedExecutionLabel}` : ""}
               </h2>
-              <p className="text-xs text-slate-400">Ejecutado: {selectedExecutionTime}</p>
+              <p className="text-xs text-muted">Ejecutado: {selectedExecutionTime}</p>
               {graphAvailable ? (
                 <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Vista</span>
-                  <div className="inline-flex overflow-hidden rounded-md border border-border text-xs text-slate-300">
+                  <span className="text-[11px] uppercase tracking-[0.24em] text-subtle">Vista</span>
+                  <div className="inline-flex overflow-hidden rounded-md border border-border text-xs text-muted">
                     <button
                       type="button"
                       onClick={() => setResultViewMode("table")}
-                      className={`px-3 py-2 transition ${resultViewMode === "table" ? "bg-accent/20 text-slate-100" : "bg-transparent hover:bg-surface"}`}
+                      className={`px-3 py-2 transition ${resultViewMode === "table" ? "bg-accent/20 text-foreground" : "bg-transparent hover:bg-surface"}`}
                     >
                       Tabla
                     </button>
                     <button
                       type="button"
                       onClick={() => setResultViewMode("graph")}
-                      className={`px-3 py-2 transition ${resultViewMode === "graph" ? "bg-accent/20 text-slate-100" : "bg-transparent hover:bg-surface"}`}
+                      className={`px-3 py-2 transition ${resultViewMode === "graph" ? "bg-accent/20 text-foreground" : "bg-transparent hover:bg-surface"}`}
                     >
                       Grafo
                     </button>
                   </div>
-                  <span className="text-xs text-slate-500">El grafo usa toda la ventana cuando se abre en pantalla completa.</span>
+                  <span className="text-xs text-subtle">El grafo usa toda la ventana cuando se abre en pantalla completa.</span>
                 </div>
               ) : (
-                <div className="mt-3 text-xs text-slate-500">Solo vista de tabla disponible para este resultado.</div>
+                <div className="mt-3 text-xs text-subtle">Solo vista de tabla disponible para este resultado.</div>
               )}
             </div>
             <StatusBadge status={selectedExecution.status} />

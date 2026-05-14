@@ -103,8 +103,8 @@ const DumpUpload = ({ caseId, onUploaded }) => {
         onDragOver={(event) => event.preventDefault()}
         className="flex flex-col items-center justify-center gap-3 text-center"
       >
-        <p className="text-sm text-slate-300">Arrastra un volcado aqui o</p>
-        <label className="cursor-pointer rounded-md border border-border px-4 py-2 text-sm">
+        <p className="text-sm text-muted">Arrastra un volcado aqui o</p>
+        <label className="cursor-pointer rounded-md border border-border px-4 py-2 text-sm text-foreground transition hover:border-accent hover:bg-surface">
           Seleccionar archivo
           <input
             type="file"
@@ -113,7 +113,7 @@ const DumpUpload = ({ caseId, onUploaded }) => {
             onChange={handleBrowse}
           />
         </label>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-subtle">
           Extensiones permitidas: {ALLOWED_EXTENSIONS.join(", ")}
         </p>
       </div>
@@ -125,7 +125,7 @@ const DumpUpload = ({ caseId, onUploaded }) => {
       ) : null}
 
       {fileInfo ? (
-        <div className="mt-4 rounded-md border border-border bg-surface p-3 text-xs text-slate-400">
+        <div className="mt-4 rounded-md border border-border bg-surface p-3 text-xs text-muted">
           <div>Archivo: {fileInfo.name}</div>
           <div>Tamano: {formatBytes(fileInfo.size)}</div>
           <div>SHA-256: {truncateHash(hash || "", 24)}</div>

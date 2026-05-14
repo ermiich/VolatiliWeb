@@ -70,7 +70,7 @@ const GraphIconButton = ({ label, onClick, children }) => (
     data-graph-control="true"
     onClick={onClick}
     onPointerDown={(event) => event.stopPropagation()}
-    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-slate-950/70 text-slate-200 shadow-lg transition hover:border-accent hover:text-white"
+    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-panel/70 text-muted shadow-lg transition hover:border-accent hover:text-foreground"
   >
       {children}
   </button>
@@ -314,14 +314,14 @@ const ProcessGraphView = ({ rows }) => {
     };
   }, [graph.height, graph.width]);
 
-  const edgeStroke = "rgba(148, 163, 184, 0.55)";
+  const edgeStroke = "color-mix(in srgb, var(--color-border) 55%, transparent)";
   const panelClassName = isFullscreen
     ? "flex h-full min-h-0 flex-col gap-3 rounded-2xl border border-border bg-surface/95 p-4 shadow-2xl"
     : "space-y-3 rounded-xl border border-border bg-surface/70 p-4"
   ;
   const graphViewportClassName = isFullscreen
-    ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-slate-950/80 cursor-grab active:cursor-grabbing"
-    : "relative overflow-hidden rounded-xl border border-border bg-slate-950/80 cursor-grab active:cursor-grabbing";
+    ? "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-panel/80 cursor-grab active:cursor-grabbing"
+    : "relative overflow-hidden rounded-xl border border-border bg-panel/80 cursor-grab active:cursor-grabbing";
   const svgClassName = isFullscreen
     ? "block h-full w-full select-none"
     : "block h-[680px] w-full select-none";
@@ -331,31 +331,31 @@ const ProcessGraphView = ({ rows }) => {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="text-sm font-semibold text-slate-100">Grafo de procesos</div>
-          <p className="text-xs leading-5 text-slate-400">
+          <div className="text-sm font-semibold text-foreground">Grafo de procesos</div>
+          <p className="text-xs leading-5 text-muted">
             Arrastra nodos para reorganizarlos, usa la rueda o los botones para hacer zoom y arrastra el fondo para mover la vista.
             {isFullscreen ? " Pulsa Esc para salir de pantalla completa." : ""}
           </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 text-[11px] text-slate-400">
-        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+      <div className="flex flex-wrap gap-3 text-[11px] text-muted">
+        <span className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1">
+          <span className="h-2 w-2 rounded-full bg-success" />
           Proceso normal
         </span>
-        <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1">
-          <span className="h-2 w-2 rounded-full bg-amber-400" />
+        <span className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-3 py-1">
+          <span className="h-2 w-2 rounded-full bg-warning" />
           Sospecha por jerarquia o nombre
         </span>
-        <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1">
-          <span className="h-2 w-2 rounded-full bg-blue-400" />
+        <span className="inline-flex items-center gap-2 rounded-full border border-info/30 bg-info/10 px-3 py-1">
+          <span className="h-2 w-2 rounded-full bg-info" />
           Nodo raiz
         </span>
       </div>
 
       <div ref={viewportRef} className={graphViewportClassName} onPointerDown={startPanDrag} onMouseDown={startPanDrag}>
-        <div className="absolute left-3 top-3 z-10 rounded-full border border-border bg-slate-950/75 px-3 py-1 text-[11px] text-slate-300 shadow-lg backdrop-blur-sm">
+        <div className="absolute left-3 top-3 z-10 rounded-full border border-border bg-panel/75 px-3 py-1 text-[11px] text-muted shadow-lg backdrop-blur-sm">
           Arrastra el fondo para mover · Scroll para zoom
         </div>
         <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
@@ -375,7 +375,7 @@ const ProcessGraphView = ({ rows }) => {
             {isFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
           </GraphIconButton>
         </div>
-        <div className="absolute bottom-3 left-3 z-10 rounded-md border border-border bg-slate-950/75 px-3 py-2 text-xs text-slate-300 shadow-lg backdrop-blur-sm">
+        <div className="absolute bottom-3 left-3 z-10 rounded-md border border-border bg-panel/75 px-3 py-2 text-xs text-muted shadow-lg backdrop-blur-sm">
           Zoom {zoomPercent}%
         </div>
         <svg
@@ -399,7 +399,7 @@ const ProcessGraphView = ({ rows }) => {
               <path d="M0,0 L0,6 L8,3 z" fill={edgeStroke} />
             </marker>
             <filter id="suspiciousGlow" x="-40%" y="-40%" width="180%" height="180%">
-              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#f59e0b" floodOpacity="0.45" />
+              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="var(--color-warning)" floodOpacity="0.45" />
             </filter>
           </defs>
 
@@ -443,15 +443,15 @@ const ProcessGraphView = ({ rows }) => {
               const position = getNodePosition(node);
               const isSuspicious = Boolean(node.suspicion);
               const nodeFill = isSuspicious
-                ? "rgba(245, 158, 11, 0.18)"
+                ? "color-mix(in srgb, var(--color-warning) 18%, transparent)"
                 : node.isRoot
-                  ? "rgba(59, 130, 246, 0.18)"
-                  : "rgba(16, 185, 129, 0.18)";
+                  ? "color-mix(in srgb, var(--color-info) 18%, transparent)"
+                  : "color-mix(in srgb, var(--color-success) 18%, transparent)";
               const nodeStroke = isSuspicious
-                ? "rgba(245, 158, 11, 0.9)"
+                ? "color-mix(in srgb, var(--color-warning) 90%, transparent)"
                 : node.isRoot
-                  ? "rgba(96, 165, 250, 0.95)"
-                  : "rgba(52, 211, 153, 0.95)";
+                  ? "color-mix(in srgb, var(--color-info) 95%, transparent)"
+                  : "color-mix(in srgb, var(--color-success) 95%, transparent)";
               const displayLabel = formatNodeLabel(node.name);
 
               return (
@@ -478,14 +478,14 @@ const ProcessGraphView = ({ rows }) => {
                     strokeWidth="2"
                     filter={isSuspicious ? "url(#suspiciousGlow)" : "none"}
                   />
-                  <text x="0" y="-4" textAnchor="middle" className="fill-slate-100 text-[13px] font-semibold">
+                  <text x="0" y="-4" textAnchor="middle" className="fill-foreground text-[13px] font-semibold">
                     {displayLabel}
                   </text>
-                  <text x="0" y="16" textAnchor="middle" className="fill-slate-300 text-[11px]">
+                  <text x="0" y="16" textAnchor="middle" className="fill-muted text-[11px]">
                     {`PID ${node.pid} · PPID ${node.ppid}`}
                   </text>
                   {node.suspicion ? (
-                    <text x="0" y="32" textAnchor="middle" className="fill-amber-200 text-[10px] uppercase tracking-[0.2em]">
+                    <text x="0" y="32" textAnchor="middle" className="fill-warning text-[10px] uppercase tracking-[0.2em]">
                       Sospechoso
                     </text>
                   ) : null}
@@ -496,7 +496,7 @@ const ProcessGraphView = ({ rows }) => {
         </svg>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <span>
           Nodos {graph.stats.nodeCount} · Aristas {graph.stats.edgeCount} · Raices {graph.stats.rootCount}
         </span>
@@ -507,7 +507,7 @@ const ProcessGraphView = ({ rows }) => {
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-slate-950/90 p-4 sm:p-6">
+      <div className="fixed inset-0 z-50 bg-overlay/90 p-4 sm:p-6">
         <div className={panelClassName}>{panel}</div>
       </div>
     );

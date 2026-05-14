@@ -37,18 +37,18 @@ const CaseCreate = ({ onCreated }) => {
     <div>
       <button
         onClick={() => setOpen(true)}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:bg-accent/90"
       >
         Nuevo caso
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4">
           <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-slate-100">Nuevo caso</h2>
+            <h2 className="text-lg font-semibold text-foreground">Nuevo caso</h2>
             <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
               <div>
-                <label className="text-xs uppercase text-slate-400">Nombre</label>
+                <label className="text-xs uppercase text-muted">Nombre</label>
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -56,7 +56,7 @@ const CaseCreate = ({ onCreated }) => {
                 />
               </div>
               <div>
-                <label className="text-xs uppercase text-slate-400">Descripcion</label>
+                <label className="text-xs uppercase text-muted">Descripcion</label>
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
@@ -67,7 +67,7 @@ const CaseCreate = ({ onCreated }) => {
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  className="rounded-md border border-border px-4 py-2 text-sm text-slate-300"
+                  className="rounded-md border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface"
                   onClick={() => setOpen(false)}
                 >
                   Cancelar
@@ -75,7 +75,7 @@ const CaseCreate = ({ onCreated }) => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? "Creando..." : "Crear"}
                 </button>

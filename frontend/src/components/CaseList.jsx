@@ -42,7 +42,7 @@ const CaseList = ({ onDeleted }) => {
 
   if (cases.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-6 text-sm text-slate-400">
+      <div className="rounded-lg border border-border bg-surface p-6 text-sm text-muted">
         No hay casos aun. Crea el primero para comenzar.
       </div>
     );
@@ -75,23 +75,23 @@ const CaseList = ({ onDeleted }) => {
             className="rounded-lg border border-border bg-surface p-5 transition hover:border-accent"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-100">{item.name}</h3>
+              <h3 className="text-base font-semibold text-foreground">{item.name}</h3>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-subtle">
                   {new Date(item.created_at).toLocaleDateString()}
                 </span>
                 <button
                   onClick={(event) => handleDelete(event, item.id)}
-                  className="rounded-md border border-border px-2 py-1 text-xs text-slate-300 hover:border-red-500 hover:text-red-300"
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted transition hover:border-danger hover:text-danger"
                 >
                   Eliminar
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-sm text-slate-400 line-clamp-2">
+            <p className="mt-2 text-sm text-muted line-clamp-2">
               {item.description || "Sin descripcion"}
             </p>
-            <div className="mt-4 flex gap-4 text-xs text-slate-400">
+            <div className="mt-4 flex gap-4 text-xs text-subtle">
               <span>{caseStats.dumps} dumps</span>
               <span>{caseStats.executions} ejecuciones</span>
             </div>

@@ -54,7 +54,7 @@ VolatiliWeb facilita el análisis forense de volcados de memoria RAM, permitiend
    Usuario         Base de datos      Volatility 3
 ```
 
-- **Frontend:** Interfaz web para usuarios.
+- **Frontend:** Interfaz web para usuarios (React + Vite + Tailwind CSS 4 en modo CSS-first).
 - **Web API:** Expone endpoints REST para gestión de casos, volcados y plugins.
 - **Worker:** Ejecuta análisis de memoria de forma asíncrona usando Volatility 3.
 - **DB/Redis:** Persistencia y colas de tareas.
