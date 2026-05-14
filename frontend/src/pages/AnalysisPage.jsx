@@ -11,6 +11,7 @@ import PluginResultTable from "../components/PluginResultTable.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import usePolling from "../hooks/usePolling.js";
 import { formatBytes, formatLocalDateTime, truncateHash } from "../utils/formatters.js";
+import { hasProcessGraphData } from "../utils/processGraph.js";
 
 const AnalysisPage = () => {
   const { dumpId } = useParams();
@@ -18,6 +19,7 @@ const AnalysisPage = () => {
   const [plugins, setPlugins] = useState([]);
   const [executions, setExecutions] = useState([]);
   const [activeExecutionId, setActiveExecutionId] = useState(null);
+  const [resultViewMode, setResultViewMode] = useState("table");
 
   const extractErrorMessage = (error, fallback) => {
     const detail = error?.response?.data?.detail;
@@ -82,6 +84,24 @@ const AnalysisPage = () => {
     }
   }, [polledExecution]);
 
+  const selectedExecution = executions.find((item) => item.id === activeExecutionId);
+  const selectedExecutionLabel = selectedExecution?.plugin_display_name || selectedExecution?.plugin_name;
+  const selectedExecutionTime = formatLocalDateTime(
+    selectedExecution?.started_at || selectedExecution?.created_at
+  );
+  const selectedExecutionRows = selectedExecution?.result_data || [];
+  const graphAvailable = hasProcessGraphData(selectedExecutionRows);
+
+  useEffect(() => {
+    if (!graphAvailable && resultViewMode === "graph") {
+      setResultViewMode("table");
+    }
+  }, [graphAvailable, resultViewMode]);
+
+  if (!dump) {
+    return <LoadingSpinner label="Cargando analisis" />;
+  }
+
   const handleExecute = async (request) => {
     const payload = typeof request === "string"
       ? { plugin_name: request }
@@ -110,16 +130,6 @@ const AnalysisPage = () => {
       toast.error(extractErrorMessage(error, isManualCommand ? "No se pudo ejecutar el comando" : "No se pudo ejecutar el plugin"));
     }
   };
-
-  if (!dump) {
-    return <LoadingSpinner label="Cargando analisis" />;
-  }
-
-  const selectedExecution = executions.find((item) => item.id === activeExecutionId);
-  const selectedExecutionLabel = selectedExecution?.plugin_display_name || selectedExecution?.plugin_name;
-  const selectedExecutionTime = formatLocalDateTime(
-    selectedExecution?.started_at || selectedExecution?.created_at
-  );
 
   // Plugins de detección de OS permitidos siempre
   const detectionPlugins = ["windows.info"];
@@ -214,6 +224,30 @@ const AnalysisPage = () => {
                 Resultado{selectedExecutionLabel ? ` · ${selectedExecutionLabel}` : ""}
               </h2>
               <p className="text-xs text-slate-400">Ejecutado: {selectedExecutionTime}</p>
+              {graphAvailable ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Vista</span>
+                  <div className="inline-flex overflow-hidden rounded-md border border-border text-xs text-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => setResultViewMode("table")}
+                      className={`px-3 py-2 transition ${resultViewMode === "table" ? "bg-accent/20 text-slate-100" : "bg-transparent hover:bg-surface"}`}
+                    >
+                      Tabla
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResultViewMode("graph")}
+                      className={`px-3 py-2 transition ${resultViewMode === "graph" ? "bg-accent/20 text-slate-100" : "bg-transparent hover:bg-surface"}`}
+                    >
+                      Grafo
+                    </button>
+                  </div>
+                  <span className="text-xs text-slate-500">El grafo usa toda la ventana cuando se abre en pantalla completa.</span>
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-slate-500">Solo vista de tabla disponible para este resultado.</div>
+              )}
             </div>
             <StatusBadge status={selectedExecution.status} />
           </div>
@@ -221,6 +255,7 @@ const AnalysisPage = () => {
             execution={selectedExecution}
             rows={selectedExecution.result_data}
             pluginName={selectedExecution.plugin_name}
+            viewMode={resultViewMode}
           />
         </div>
       ) : null}

@@ -8,9 +8,12 @@ import {
   useReactTable
 } from "@tanstack/react-table";
 
+import ProcessGraphView from "./ProcessGraphView.jsx";
+import { buildProcessSuspicionMap, hasProcessGraphData } from "../utils/processGraph.js";
+
 const DEFAULT_PAGE_SIZE = 25;
 
-const PluginResultTable = ({ execution, rows, pluginName }) => {
+const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) => {
   const [sorting, setSorting] = useState([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -56,6 +59,9 @@ const PluginResultTable = ({ execution, rows, pluginName }) => {
     }
   });
 
+  const filteredRows = table.getFilteredRowModel().rows.map((row) => row.original);
+  const graphAvailable = hasProcessGraphData(filteredRows);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setGlobalFilter(searchInput);
@@ -63,59 +69,9 @@ const PluginResultTable = ({ execution, rows, pluginName }) => {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const pidSet = useMemo(() => {
-    const set = new Set();
-    data.forEach((row) => {
-      const pid = Number(row.PID);
-      if (!Number.isNaN(pid)) {
-        set.add(pid);
-      }
-    });
-    return set;
-  }, [data]);
-
   const suspiciousMap = useMemo(() => {
-    const isPsListPlugin = String(pluginName || "") === "windows.pslist";
-    if (!isPsListPlugin) {
-      return {};
-    }
-    const counts = data.reduce((acc, row) => {
-      const name = String(row.ImageFileName || "").toLowerCase();
-      if (name) {
-        acc[name] = (acc[name] || 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    const map = {};
-    data.forEach((row, index) => {
-      const pid = Number(row.PID);
-      const ppid = Number(row.PPID);
-      const image = String(row.ImageFileName || "");
-      if (!Number.isNaN(ppid) && ppid > 0 && !pidSet.has(ppid)) {
-        map[index] = {
-          level: "yellow",
-          reason: "Proceso huerfano (PPID no encontrado). Puede ser benigno en snapshots de memoria."
-        };
-        return;
-      }
-      if (!Number.isNaN(pid) && pid < 4 && !["System", "Idle"].includes(image)) {
-        map[index] = {
-          level: "yellow",
-          reason: "PID bajo inesperado"
-        };
-        return;
-      }
-      const key = image.toLowerCase();
-      if (["smss.exe", "csrss.exe", "wininit.exe"].includes(key) && counts[key] > 1) {
-        map[index] = {
-          level: "yellow",
-          reason: "Instancia duplicada del proceso critico"
-        };
-      }
-    });
-    return map;
-  }, [data, pidSet, pluginName]);
+    return buildProcessSuspicionMap(data);
+  }, [data]);
 
   const exportCsv = () => {
     if (!data.length) {
@@ -176,9 +132,11 @@ const PluginResultTable = ({ execution, rows, pluginName }) => {
       </div>
     );
   } else {
+    const graphRows = filteredRows;
+
     content = (
       <>
-        {pluginName === "windows.pslist" ? (
+        {graphAvailable ? (
           <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
             Las marcas de color son heuristicas de triage, no una conclusion forense. Requieren validacion con
             contexto (timeline, parent real, command line, handles, red, etc.).
@@ -233,84 +191,94 @@ const PluginResultTable = ({ execution, rows, pluginName }) => {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/60">
-          <div className="flex flex-wrap gap-2 border-b border-border px-3 py-2 text-xs text-slate-400">
-            {table.getAllLeafColumns().map((column) => (
-              <label key={column.id} className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={column.getIsVisible()}
-                  onChange={column.getToggleVisibilityHandler()}
-                />
-                {column.id}
-              </label>
-            ))}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
-              <thead className="border-b border-border text-slate-400">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="cursor-pointer px-3 py-2"
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{ asc: " ^", desc: " v" }[header.column.getIsSorted()] ?? ""}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => {
-                  const suspicious = suspiciousMap[row.index];
-                  const rowClass = suspicious
-                    ? suspicious.level === "red"
-                      ? "bg-red-900/30 border-l-2 border-red-500"
-                      : "bg-yellow-900/20 border-l-2 border-yellow-500"
-                    : "";
-                  return (
-                    <tr
-                      key={row.id}
-                      className={rowClass}
-                      title={suspicious ? suspicious.reason : ""}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-3 py-2">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
+        {viewMode === "graph" ? (
+          graphRows.length > 0 ? (
+            <ProcessGraphView rows={graphRows} />
+          ) : (
+            <div className="rounded-lg border border-border bg-surface p-6 text-sm text-slate-400">
+              No hay suficiente informacion de procesos para construir el grafo con el filtro actual.
+            </div>
+          )
+        ) : (
+          <div className="rounded-lg border border-border bg-surface/60">
+            <div className="flex flex-wrap gap-2 border-b border-border px-3 py-2 text-xs text-slate-400">
+              {table.getAllLeafColumns().map((column) => (
+                <label key={column.id} className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={column.getIsVisible()}
+                    onChange={column.getToggleVisibilityHandler()}
+                  />
+                  {column.id}
+                </label>
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead className="border-b border-border text-slate-400">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className="cursor-pointer px-3 py-2"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{ asc: " ^", desc: " v" }[header.column.getIsSorted()] ?? ""}
+                        </th>
                       ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-slate-400">
-            <span>
-              Pagina {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="rounded-md border border-border px-2 py-1 disabled:opacity-40"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="rounded-md border border-border px-2 py-1 disabled:opacity-40"
-              >
-                Siguiente
-              </button>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map((row) => {
+                    const suspicious = suspiciousMap[row.index];
+                    const rowClass = suspicious
+                      ? suspicious.level === "red"
+                        ? "bg-red-900/30 border-l-2 border-red-500"
+                        : "bg-yellow-900/20 border-l-2 border-yellow-500"
+                      : "";
+                    return (
+                      <tr
+                        key={row.id}
+                        className={rowClass}
+                        title={suspicious ? suspicious.reason : ""}
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-3 py-2">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-slate-400">
+              <span>
+                Pagina {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="rounded-md border border-border px-2 py-1 disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="rounded-md border border-border px-2 py-1 disabled:opacity-40"
+                >
+                  Siguiente
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </>
     );
   }
