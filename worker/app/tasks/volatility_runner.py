@@ -1,11 +1,61 @@
 import json
+import os
+import shutil
 import subprocess
+import tempfile
+from pathlib import Path
 
 
 def _to_serializable(value):
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _needs_strings_file(plugin_class_path: str, extra_args: list[str] | None) -> bool:
+    if plugin_class_path != "windows.strings.Strings":
+        return False
+    if not extra_args:
+        return True
+    return not any(
+        token == "--strings-file" or token.startswith("--strings-file=")
+        for token in extra_args
+    )
+
+
+def _generate_strings_file(dump_path: str) -> str:
+    strings_binary = shutil.which("strings")
+    if strings_binary is None:
+        raise RuntimeError(
+            "No se encontro el comando 'strings' necesario para ejecutar el plugin Windows Strings"
+        )
+
+    fd, temp_path = tempfile.mkstemp(prefix="volatiliweb_strings_", suffix=".txt")
+    os.close(fd)
+
+    try:
+        with open(temp_path, "w", encoding="utf-8") as output_handle:
+            for strings_args in (
+                ["-a", "-t", "d", "-n", "4"],
+                ["-a", "-t", "d", "-n", "4", "-e", "l"],
+            ):
+                completed = subprocess.run(
+                    [strings_binary, *strings_args, dump_path],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if completed.returncode != 0:
+                    detail = (completed.stderr or completed.stdout or "").strip()
+                    raise RuntimeError(f"Error generando strings\n{detail}")
+                if completed.stdout:
+                    output_handle.write(completed.stdout)
+                    if not completed.stdout.endswith("\n"):
+                        output_handle.write("\n")
+        return temp_path
+    except Exception:
+        Path(temp_path).unlink(missing_ok=True)
+        raise
 
 
 def execute_volatility_plugin(
@@ -15,6 +65,13 @@ def execute_volatility_plugin(
     extra_args: list[str] | None = None,
     timeout_seconds: int = 1500,
 ) -> dict:
+    effective_extra_args = list(extra_args or [])
+    generated_strings_file = None
+
+    if _needs_strings_file(plugin_class_path, effective_extra_args):
+        generated_strings_file = _generate_strings_file(dump_path)
+        effective_extra_args.extend(["--strings-file", generated_strings_file])
+
     cmd = [
         "python",
         "/opt/volatility3/vol.py",
@@ -27,8 +84,8 @@ def execute_volatility_plugin(
         "json",
         plugin_class_path,
     ]
-    if extra_args:
-        cmd.extend(extra_args)
+    if effective_extra_args:
+        cmd.extend(effective_extra_args)
 
     try:
         completed = subprocess.run(
@@ -42,6 +99,9 @@ def execute_volatility_plugin(
         raise TimeoutError(
             f"El plugin '{plugin_class_path}' supero el limite de {timeout_seconds}s"
         ) from exc
+    finally:
+        if generated_strings_file is not None:
+            Path(generated_strings_file).unlink(missing_ok=True)
 
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()

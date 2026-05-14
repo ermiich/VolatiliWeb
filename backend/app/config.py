@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     evidence_path: str = "/evidence"
     symbols_path: str = "/symbols"
     secret_key: str = "dev_secret_key"
-    allowed_origins: str = "http://localhost:3000"
+    allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     max_upload_size_mb: int = 32768
     upload_chunk_size_mb: int = 100
 
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         parts = [item.strip() for item in self.allowed_origins.split(",") if item.strip()]
-        return parts or ["http://localhost:3000"]
+        return parts or ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     class Config:
         env_file = ".env"

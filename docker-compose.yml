@@ -7,7 +7,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://127.0.0.1:8000
     depends_on:
       - web-api
     networks:
@@ -50,7 +50,7 @@ services:
         condition: service_healthy
     networks:
       - volatiliweb-net
-    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
 
   redis:
     image: redis:7.2-alpine

@@ -78,11 +78,11 @@ cp .env.example .env
 # Edita .env con tus valores seguros (POSTGRES_PASSWORD, SECRET_KEY, etc)
 docker compose up --build
 # Primera vez: la build del worker descarga Volatility 3 (~2 min)
-# Accede a: http://localhost:3000
+# Accede a: http://127.0.0.1:3000
 ```
 
 [!TIP]
-> Puedes personalizar la URL de la API para el frontend editando `VITE_API_URL` en `.env` y `docker-compose.yml`.
+> Puedes personalizar la URL de la API para el frontend editando `VITE_API_URL` en `.env` y `docker-compose.yml`. En esta configuración local usamos `127.0.0.1` para evitar problemas de resolución de `localhost` en Windows.
 
 ## Configuración de entorno
 
@@ -93,7 +93,7 @@ POSTGRES_USER=volatiliweb
 POSTGRES_PASSWORD=changeme
 POSTGRES_DB=volatiliweb_db
 SECRET_KEY=changeme
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://127.0.0.1:8000
 MAX_UPLOAD_SIZE_MB=2048
 ```
 

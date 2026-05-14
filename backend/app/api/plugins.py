@@ -3,6 +3,7 @@ import shlex
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
@@ -361,22 +362,7 @@ async def execute_plugin(
     if not dump.detected_os and plugin_name not in detection_plugins:
         raise HTTPException(status_code=422, detail="El dump no tiene OS detectado. Solo puedes ejecutar plugins de detección de OS.")
 
-    existing = await session.execute(
-        select(PluginExecution).where(
-            PluginExecution.dump_id == dump_id,
-            PluginExecution.plugin_name.in_({plugin_name, plugin_entry["class_path"]}),
-            PluginExecution.command_suffix == command_suffix,
-        )
-    )
-    execution = existing.scalar_one_or_none()
-
-    if execution and execution.status == ExecutionStatus.completed and (execution.result_row_count or 0) > 0:
-        response.headers["X-Cached"] = "true"
-        response.status_code = 200
-        return _serialize_execution(execution)
-
-    if execution and execution.status == ExecutionStatus.completed:
-        # Re-run stale/empty cached executions without violating unique constraints.
+    async def queue_execution(execution: PluginExecution) -> PluginExecution:
         execution.status = ExecutionStatus.pending
         execution.error_message = None
         execution.error_traceback = None
@@ -391,6 +377,25 @@ async def execute_plugin(
 
         await session.commit()
         await session.refresh(execution)
+        return execution
+
+    existing = await session.execute(
+        select(PluginExecution).where(
+            PluginExecution.dump_id == dump_id,
+            PluginExecution.plugin_name.in_({plugin_name, plugin_entry["class_path"]}),
+            PluginExecution.command_suffix == command_suffix,
+        )
+    )
+    execution = existing.scalar_one_or_none()
+
+    if execution and execution.status == ExecutionStatus.completed and (execution.result_row_count or 0) > 0:
+        response.headers["X-Cached"] = "true"
+        response.status_code = 200
+        return _serialize_execution(execution)
+
+    if execution and execution.status in {ExecutionStatus.completed, ExecutionStatus.failed}:
+        # Re-run stale/empty cached executions without violating unique constraints.
+        execution = await queue_execution(execution)
         response.status_code = 202
         return _serialize_execution(execution)
 
@@ -406,16 +411,35 @@ async def execute_plugin(
         status=ExecutionStatus.pending,
     )
     session.add(new_execution)
-    await session.flush()
+    try:
+        await session.flush()
 
-    celery_app = get_celery_app()
-    task = celery_app.send_task("run_plugin", args=[str(new_execution.id), plugin_entry["class_path"]])
-    new_execution.celery_task_id = task.id
-    await session.commit()
-    await session.refresh(new_execution)
+        celery_app = get_celery_app()
+        task = celery_app.send_task("run_plugin", args=[str(new_execution.id), plugin_entry["class_path"]])
+        new_execution.celery_task_id = task.id
+        await session.commit()
+        await session.refresh(new_execution)
 
-    response.status_code = 202
-    return _serialize_execution(new_execution)
+        response.status_code = 202
+        return _serialize_execution(new_execution)
+    except IntegrityError:
+        await session.rollback()
+        existing_retry = await session.execute(
+            select(PluginExecution).where(
+                PluginExecution.dump_id == dump_id,
+                PluginExecution.plugin_name.in_({plugin_name, plugin_entry["class_path"]}),
+                PluginExecution.command_suffix == command_suffix,
+            )
+        )
+        execution = existing_retry.scalar_one_or_none()
+        if execution is None:
+            raise
+
+        if execution.status in {ExecutionStatus.completed, ExecutionStatus.failed}:
+            execution = await queue_execution(execution)
+
+        response.status_code = 202
+        return _serialize_execution(execution)
 
 
 @router.post("/dumps/{dump_id}/set_os", status_code=200)
