@@ -12,6 +12,7 @@ import StatusBadge from "../components/StatusBadge.jsx";
 import usePolling from "../hooks/usePolling.js";
 import { formatBytes, formatLocalDateTime, truncateHash } from "../utils/formatters.js";
 import { hasProcessGraphData } from "../utils/processGraph.js";
+import { hasTimelineData } from "../utils/timeline.js";
 
 const DASHBOARD_VIEWS = [
   {
@@ -183,13 +184,17 @@ const AnalysisPage = () => {
   );
   const selectedExecutionRows = selectedExecution?.result_data || [];
   const graphAvailable = hasProcessGraphData(selectedExecutionRows);
+  const timelineAvailable = hasTimelineData(selectedExecutionRows);
   const latestExecution = executionTimeline[0] || null;
 
   useEffect(() => {
     if (!graphAvailable && resultViewMode === "graph") {
       setResultViewMode("table");
     }
-  }, [graphAvailable, resultViewMode]);
+    if (!timelineAvailable && resultViewMode === "timeline") {
+      setResultViewMode("table");
+    }
+  }, [graphAvailable, timelineAvailable, resultViewMode]);
 
   if (!dump) {
     return <LoadingSpinner label="Cargando analisis" />;
@@ -496,7 +501,7 @@ const AnalysisPage = () => {
 
           {selectedExecution ? (
             <>
-              {graphAvailable ? (
+              {graphAvailable || timelineAvailable ? (
                 <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-panel/40 px-4 py-3">
                   <span className="text-[11px] uppercase tracking-[0.24em] text-subtle">Vista</span>
                   <div className="inline-flex overflow-hidden rounded-md border border-border text-xs text-muted">
@@ -514,8 +519,25 @@ const AnalysisPage = () => {
                     >
                       Grafo
                     </button>
+                    {timelineAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => setResultViewMode("timeline")}
+                        className={`px-3 py-2 transition ${resultViewMode === "timeline" ? "bg-accent/20 text-foreground" : "bg-transparent hover:bg-surface"}`}
+                      >
+                        Timeline
+                      </button>
+                    ) : null}
                   </div>
-                  <span className="text-xs text-subtle">El grafo puede abrirse en pantalla completa para explorar mejor los procesos.</span>
+                  <span className="text-xs text-subtle">
+                    {resultViewMode === "timeline"
+                      ? "La cronología agrupa eventos por ventanas temporales y filtra la tabla al tocar una barra."
+                      : "El grafo puede abrirse en pantalla completa para explorar mejor los procesos."}
+                  </span>
+                </div>
+              ) : timelineAvailable ? (
+                <div className="mt-4 rounded-2xl border border-border bg-panel/40 px-4 py-3 text-xs text-subtle">
+                  Este resultado no genera grafo de procesos, pero sí una cronología temporal útil para analizar picos y secuencias.
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl border border-border bg-panel/40 px-4 py-3 text-xs text-subtle">

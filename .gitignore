@@ -10,3 +10,4 @@ volatiliweb.yml
 github/
 llm.*
 docker-compose.prod.yml
+*dist/*

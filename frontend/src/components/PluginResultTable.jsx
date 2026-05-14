@@ -9,7 +9,9 @@ import {
 } from "@tanstack/react-table";
 
 import ProcessGraphView from "./ProcessGraphView.jsx";
+import TimelineView from "./TimelineView.jsx";
 import { buildProcessSuspicionMap, hasProcessGraphData } from "../utils/processGraph.js";
+import { buildTimelineModel, filterRowsByTimelineRange } from "../utils/timeline.js";
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -18,6 +20,7 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
   const [globalFilter, setGlobalFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [columnVisibility, setColumnVisibility] = useState({});
+  const [timelineSelection, setTimelineSelection] = useState(null);
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -26,19 +29,32 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
   const executionLabel = execution?.plugin_display_name || pluginName || "Plugin";
   const data = rows || [];
 
+  useEffect(() => {
+    setTimelineSelection(null);
+    setPagination((current) => ({
+      ...current,
+      pageIndex: 0,
+    }));
+  }, [execution?.id, pluginName]);
+
+  const timelineFilteredData = useMemo(() => {
+    return filterRowsByTimelineRange(data, timelineSelection);
+  }, [data, timelineSelection]);
+
   const columns = useMemo(() => {
-    if (!data.length) {
+    const columnSource = timelineFilteredData.length ? timelineFilteredData : data;
+    if (!columnSource.length) {
       return [];
     }
-    return Object.keys(data[0]).map((key) => ({
+    return Object.keys(columnSource[0]).map((key) => ({
       accessorKey: key,
       header: key,
       cell: (info) => String(info.getValue())
     }));
-  }, [data]);
+  }, [timelineFilteredData, data]);
 
   const table = useReactTable({
-    data,
+    data: timelineFilteredData,
     columns,
     state: { sorting, globalFilter, columnVisibility, pagination },
     onSortingChange: setSorting,
@@ -60,6 +76,7 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
 
   const filteredRows = table.getFilteredRowModel().rows.map((row) => row.original);
   const graphAvailable = hasProcessGraphData(filteredRows);
+  const timelineModel = useMemo(() => buildTimelineModel(filteredRows), [filteredRows]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -69,16 +86,23 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
   }, [searchInput]);
 
   const suspiciousMap = useMemo(() => {
-    return buildProcessSuspicionMap(data);
-  }, [data]);
+    return buildProcessSuspicionMap(timelineFilteredData);
+  }, [timelineFilteredData]);
+
+  useEffect(() => {
+    setPagination((current) => ({
+      ...current,
+      pageIndex: 0,
+    }));
+  }, [searchInput, timelineSelection]);
 
   const exportCsv = () => {
-    if (!data.length) {
+    if (!filteredRows.length) {
       return;
     }
-    const headers = Object.keys(data[0]);
+    const headers = Object.keys(filteredRows[0]);
     const lines = [headers.join(",")];
-    data.forEach((row) => {
+    filteredRows.forEach((row) => {
       const values = headers.map((header) => {
         const value = row[header];
         const escaped = String(value ?? "").replace(/"/g, '""');
@@ -104,13 +128,13 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
         <div>
           <span className="font-medium">Plugin:</span> {executionLabel}
         </div>
-        <div className="whitespace-pre-wrap break-words rounded-md border border-danger/20 bg-panel/80 p-3 text-xs text-danger">
+        <div className="whitespace-pre-wrap wrap-break-word rounded-md border border-danger/20 bg-panel/80 p-3 text-xs text-danger">
           {execution?.error_message || "No se recibio un mensaje de error detallado."}
         </div>
         {execution?.error_traceback ? (
           <details className="rounded-md border border-danger/20 bg-panel/80 p-3 text-xs text-foreground">
             <summary className="cursor-pointer select-none text-danger">Ver detalle tecnico</summary>
-            <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-muted">
+            <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap wrap-break-word text-[11px] leading-5 text-muted">
               {execution.error_traceback}
             </pre>
           </details>
@@ -135,6 +159,15 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
 
     content = (
       <>
+        {viewMode === "timeline" ? (
+          <TimelineView
+            model={timelineModel}
+            selectedRange={timelineSelection}
+            onSelectRange={setTimelineSelection}
+            onClearSelection={() => setTimelineSelection(null)}
+          />
+        ) : null}
+
         {graphAvailable ? (
           <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
             Las marcas de color son heuristicas de triage, no una conclusion forense. Requieren validacion con
@@ -166,7 +199,7 @@ const PluginResultTable = ({ execution, rows, pluginName, viewMode = "table" }) 
                     pageSize: value,
                   }));
                 }}
-                className="w-full appearance-none rounded-md border border-border bg-surface/90 px-3 py-2 pr-9 text-xs text-foreground outline-none transition focus:border-accent focus:ring-1 focus:ring-accent [color-scheme:dark]"
+                className="w-full appearance-none rounded-md border border-border bg-surface/90 px-3 py-2 pr-9 text-xs text-foreground outline-none transition focus:border-accent focus:ring-1 focus:ring-accent scheme-dark"
               >
                 {[10, 25, 50, 100].map((size) => (
                   <option key={size} value={size} className="bg-surface text-foreground">
